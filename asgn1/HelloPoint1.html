@@ -1,0 +1,67 @@
+<!--I added a button that when clicked rotates through a bunch of colors as the user drags across the canvas. Once the button is turned off, the color switches back to what it was originally-->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Interactive Shape Brush</title>
+    <style>
+      /* Optional: simple styling for UI elements */
+      #controls {
+        margin-top: 10px;
+      }
+      #controls > div {
+        margin-bottom: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="webgl" width="400" height="400">
+      Please use a browser that supports "canvas"
+    </canvas>
+
+    <!-- UI Controls -->
+    <div id="controls">
+      <div>
+        Brush:
+        <button onclick="setBrush('point')">Square</button>
+        <button onclick="setBrush('triangle')">Triangle</button>
+        <button onclick="setBrush('circle')">Circle</button>
+      </div>
+      <div>
+        <button onclick="clearCanvas()">Clear Canvas</button>
+      </div>
+      <div>
+        <!-- Button to draw the triangle art (e.g., a tree) -->
+        <button onclick="drawTriangleArt()">Draw Triangle Art</button>
+      </div>
+      <div>
+        <!-- Button to toggle color cycling when dragging -->
+        <button id="toggleColorCycleBtn" onclick="toggleColorCycle()">Enable Color Cycle</button>
+      </div>
+      <div>
+        <label for="sizeSlider">Size:</label>
+        <input type="range" id="sizeSlider" min="1" max="50" value="10" onchange="updateSize(this.value)" />
+      </div>
+      <div>
+        <label for="redSlider">Red:</label>
+        <input type="range" id="redSlider" min="0" max="1" step="0.01" value="1" onchange="updateColor()" />
+        <label for="greenSlider">Green:</label>
+        <input type="range" id="greenSlider" min="0" max="1" step="0.01" value="0" onchange="updateColor()" />
+        <label for="blueSlider">Blue:</label>
+        <input type="range" id="blueSlider" min="0" max="1" step="0.01" value="0" onchange="updateColor()" />
+      </div>
+      <div>
+        <label for="circleSegments">Circle Segments:</label>
+        <input type="range" id="circleSegments" min="3" max="50" value="20" onchange="updateCircleSegments(this.value)" />
+      </div>
+    </div>
+
+    <!-- Include helper libraries and your drawing scripts -->
+    <script src="libs/webgl-utils.js"></script>
+    <script src="libs/webgl-debug.js"></script>
+    <script src="libs/cuon-utils.js"></script>
+    <!-- Do not include HelloPoint1.js to avoid conflicts -->
+    <script src="ColoredPoints.js"></script>
+  </body>
+</html>
