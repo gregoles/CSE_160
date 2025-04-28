@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebGL Hierarchical 3D Animal</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    #ui { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 8px; }
+    label { display: block; margin-top: 5px; }
+    #perf { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <canvas id="glcanvas" width="800" height="600"></canvas>
+  <div id="ui">
+    <label>Global Rotation: <input type="range" id="slider-global" min="-180" max="180" value="20"></label>
+    <label>Hip Angle: <input type="range" id="slider-hip" min="-45" max="45" value="0"></label>
+    <label>Knee Angle: <input type="range" id="slider-knee" min="0" max="90" value="10"></label>
+    <button id="btn-toggle">Toggle Tail Animation</button>
+  </div>
+  <div id="perf">FPS: <span id="fps">0</span></div>
+  <script src="https://cdn.jsdelivr.net/npm/gl-matrix@2.8.1/dist/gl-matrix-min.js"></script>
+  <script>
+    const canvas = document.getElementById('glcanvas');
+    const gl = canvas.getContext('webgl');
+    if (!gl) alert('WebGL not supported');
+    gl.enable(gl.DEPTH_TEST);
+
+    // Shaders
+    const vsSrc = `
+      attribute vec4 a_position;
+      uniform mat4 u_matrix;
+      void main() { gl_Position = u_matrix * a_position; }
+    `;
+    const fsSrc = `
+      precision mediump float;
+      uniform vec4 u_color;
+      void main() { gl_FragColor = u_color; }
+    `;
+    function createShader(type, src) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, src);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(shader));
+      return shader;
+    }
+    const program = gl.createProgram();
+    gl.attachShader(program, createShader(gl.VERTEX_SHADER, vsSrc));
+    gl.attachShader(program, createShader(gl.FRAGMENT_SHADER, fsSrc));
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    const aPos = gl.getAttribLocation(program, 'a_position');
+    const uMat = gl.getUniformLocation(program, 'u_matrix');
+    const uCol = gl.getUniformLocation(program, 'u_color');
+
+    // Cube geometry
+    const cubeVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cubeVBO);
+    const vertices = [
+      -0.5,-0.5, 0.5,  0.5,-0.5, 0.5,  0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+      -0.5,-0.5,-0.5,  0.5,-0.5,-0.5,  0.5, 0.5,-0.5, -0.5, 0.5,-0.5
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    const cubeIBO = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeIBO);
+    const indices = [0,1,2, 0,2,3, 4,5,6, 4,6,7, 0,4,7, 0,7,3, 1,5,6, 1,6,2, 3,2,6, 3,6,7, 0,1,5, 0,5,4];
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+    // UI
+    const sGlobal = document.getElementById('slider-global');
+    const sHip = document.getElementById('slider-hip');
+    const sKnee = document.getElementById('slider-knee');
+    const btnToggle = document.getElementById('btn-toggle');
+    let animate = false;
+    btnToggle.addEventListener('click', () => animate = !animate);
+
+    let lastTime = 0, fpsCount = 0, fpsTime = 0;
+    function drawCube(matrix, color) {
+      gl.uniformMatrix4fv(uMat, false, matrix);
+      gl.uniform4fv(uCol, color);
+      gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    function render(globalRot, hipAng, kneeAng) {
+      gl.clearColor(0.8, 0.9, 1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      // View transform: zoom out and apply global rotation
+      const view = mat4.create();
+      mat4.scale(view, view, [0.8, 0.8, 0.8]);
+      mat4.rotateY(view, view, glMatrix.toRadian(globalRot));
+
+      // Body
+      const body = mat4.clone(view);
+      mat4.scale(body, body, [1.5, 0.8, 0.8]);
+      drawCube(body, [0.7, 0.5, 0.3, 1]);
+
+      // Neck & Head attached to body
+      const neck = mat4.clone(body);
+      mat4.translate(neck, neck, [0, 0.4 + 0.3, 0.4 + 0.3]);
+      mat4.rotateX(neck, neck, glMatrix.toRadian(-20));
+      mat4.scale(neck, neck, [0.3, 0.6, 0.3]);
+      drawCube(neck, [0.7, 0.5, 0.3, 1]);
+
+      const head = mat4.clone(neck);
+      mat4.translate(head, head, [0, 0.6, 0]);
+      mat4.scale(head, head, [0.5, 0.5, 0.6]);
+      drawCube(head, [1, 0.9, 0.8, 1]);
+      [[-0.2, 0.6, 0.2], [0.2, 0.6, 0.2]].forEach(offset => {
+        const ear = mat4.clone(head);
+        mat4.translate(ear, ear, offset);
+        mat4.scale(ear, ear, [0.1, 0.2, 0.05]);
+        drawCube(ear, [1, 0.9, 0.8, 1]);
+      });
+
+      // Legs: four with hip & knee
+      const legPos = [[0.6, -0.4, 0.5], [-0.6, -0.4, 0.5], [0.6, -0.4, -0.5], [-0.6, -0.4, -0.5]];
+      legPos.forEach(pos => {
+        const hip = mat4.clone(view);
+        mat4.translate(hip, hip, pos);
+        mat4.rotateX(hip, hip, glMatrix.toRadian(hipAng));
+        mat4.scale(hip, hip, [0.2, 0.6, 0.2]);
+        drawCube(hip, [0.4, 0.3, 0.2, 1]);
+
+        const knee = mat4.clone(hip);
+        mat4.translate(knee, knee, [0, -0.6, 0]);
+        mat4.rotateX(knee, knee, glMatrix.toRadian(-kneeAng));
+        mat4.scale(knee, knee, [1, 1, 1]);
+        drawCube(knee, [0.4, 0.3, 0.2, 1]);
+      });
+
+      // Tail: different color (green) at back of body
+      const tailBase = mat4.clone(view);
+      mat4.translate(tailBase, tailBase, [0, 0, -0.65]);
+      const tailAngle = animate ? Math.sin(lastTime * 0.002) * 25 : 0;
+      mat4.rotateZ(tailBase, tailBase, glMatrix.toRadian(tailAngle));
+      mat4.scale(tailBase, tailBase, [0.15, 0.5, 0.15]);
+      drawCube(tailBase, [0.2, 0.8, 0.2, 1]);
+      const tailTip = mat4.clone(tailBase);
+      mat4.translate(tailTip, tailTip, [0, -0.5, 0]);
+      mat4.rotateZ(tailTip, tailTip, glMatrix.toRadian(animate ? Math.sin(lastTime * 0.002 + 1) * 20 : 0));
+      mat4.scale(tailTip, tailTip, [1, 1, 1]);
+      drawCube(tailTip, [0.2, 0.8, 0.2, 1]);
+    }
+
+    function tick(now) {
+      const dt = now - lastTime;
+      lastTime = now;
+      fpsTime += dt; fpsCount++;
+      if (fpsTime > 1000) {
+        document.getElementById('fps').textContent = fpsCount;
+        fpsCount = 0; fpsTime -= 1000;
+      }
+      render(
+        parseFloat(sGlobal.value),
+        parseFloat(sHip.value),
+        parseFloat(sKnee.value)
+      );
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // Mouse drag for global rotation
+    let dragging = false, startX, startY;
+    canvas.addEventListener('mousedown', e => { dragging = true; startX = e.clientX; startY = e.clientY; });
+    window.addEventListener('mouseup', () => dragging = false);
+    canvas.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      sGlobal.value = parseFloat(sGlobal.value) + dx * 0.5;
+      startX = e.clientX; startY = e.clientY;
+    });
+  </script>
+</body>
+</html>
